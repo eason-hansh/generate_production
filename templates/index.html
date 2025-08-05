@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>生产任务单生成系统</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 900px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .upload-section {
+            margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .upload-area {
+            border: 3px dashed #ddd;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            height: 200px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .upload-area:hover, .upload-area.dragover {
+            border-color: #667eea;
+            background-color: #f8f9ff;
+        }
+
+        .upload-area i {
+            font-size: 2.5em;
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        .upload-area h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+
+        .upload-area p {
+            color: #666;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-info {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            right: 15px;
+            background: rgba(248, 249, 250, 0.95);
+            border-radius: 8px;
+            padding: 8px 12px;
+            display: none;
+            font-size: 0.8em;
+            border: 1px solid #e9ecef;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            max-width: calc(100% - 30px);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file-info.show {
+            display: block;
+        }
+
+        .file-info i {
+            color: #28a745;
+            margin-right: 6px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .button-section {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .submit-btn {
+            flex: 2;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .clear-btn {
+            flex: 1;
+            padding: 15px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .clear-btn:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+        }
+
+        .status-section {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .status-section.show {
+            display: block;
+        }
+
+        .status-processing {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+
+        .status-completed {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .download-btn {
+            display: none;
+            width: 100%;
+            padding: 15px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            text-align: center;
+        }
+
+        .download-btn:hover {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+
+        .download-btn.show {
+            display: block;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            .upload-section {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .button-section {
+                flex-direction: column;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-cogs"></i> 生产任务单生成系统</h1>
+            <p>上传采购订单PDF和Excel模板，自动生成生产任务单</p>
+        </div>
+
+        <form id="uploadForm">
+            <div class="upload-section">
+                <div class="upload-area" id="pdfUploadArea">
+                    <i class="fas fa-file-pdf"></i>
+                    <h3>上传采购订单PDF</h3>
+                    <p>点击选择或拖拽PDF文件到此处</p>
+                    <input type="file" id="pdfFile" class="file-input" accept=".pdf" required>
+                    <div class="file-info" id="pdfFileInfo"></div>
+                </div>
+
+                <div class="upload-area" id="excelUploadArea">
+                    <i class="fas fa-file-excel"></i>
+                    <h3>上传Excel模板</h3>
+                    <p>点击选择或拖拽Excel文件到此处</p>
+                    <input type="file" id="excelFile" class="file-input" accept=".xlsx,.xls" required>
+                    <div class="file-info" id="excelFileInfo"></div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="taskOrderNo">任务单号</label>
+                    <input type="text" id="taskOrderNo" name="taskOrderNo" required>
+                </div>
+                <div class="form-group">
+                    <label for="orderDate">制单日期</label>
+                    <input type="date" id="orderDate" name="orderDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="deliveryDate">交货期</label>
+                    <input type="date" id="deliveryDate" name="deliveryDate" required>
+                </div>
+            </div>
+
+            <div class="button-section">
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    <i class="fas fa-play"></i> 开始处理
+                </button>
+                <button type="button" class="clear-btn" id="clearBtn">
+                    <i class="fas fa-eraser"></i> 清空
+                </button>
+            </div>
+        </form>
+
+        <div class="status-section" id="statusSection">
+            <div id="statusMessage"></div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+
+        <a href="#" class="download-btn" id="downloadBtn">
+            <i class="fas fa-download"></i> 下载生产任务单
+        </a>
+    </div>
+
+    <script>
+        let currentTaskId = null;
+        let statusCheckInterval = null;
+
+        // 设置默认日期
+        document.getElementById('orderDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('deliveryDate').value = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+        // 文件上传处理
+        function setupFileUpload(uploadAreaId, fileInputId, fileInfoId) {
+            const uploadArea = document.getElementById(uploadAreaId);
+            const fileInput = document.getElementById(fileInputId);
+            const fileInfo = document.getElementById(fileInfoId);
+
+            uploadArea.addEventListener('click', () => fileInput.click());
+            
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+            
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+            
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    fileInput.files = files;
+                    updateFileInfo(fileInfo, files[0]);
+                }
+            });
+            
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    updateFileInfo(fileInfo, e.target.files[0]);
+                }
+            });
+        }
+
+        function updateFileInfo(fileInfo, file) {
+            fileInfo.innerHTML = `<i class="fas fa-check-circle"></i>${file.name} (${formatFileSize(file.size)})`;
+            fileInfo.classList.add('show');
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 清空功能
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            clearForm();
+        });
+
+        function clearForm() {
+            // 重置表单
+            document.getElementById('uploadForm').reset();
+            
+            // 清除文件信息
+            document.getElementById('pdfFileInfo').innerHTML = '';
+            document.getElementById('pdfFileInfo').classList.remove('show');
+            document.getElementById('excelFileInfo').innerHTML = '';
+            document.getElementById('excelFileInfo').classList.remove('show');
+            
+            // 隐藏状态区域
+            document.getElementById('statusSection').classList.remove('show');
+            
+            // 隐藏下载按钮
+            document.getElementById('downloadBtn').classList.remove('show');
+            
+            // 重置按钮状态
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-play"></i> 开始处理';
+            
+            // 设置默认日期
+            document.getElementById('orderDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('deliveryDate').value = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            
+            // 清除任务ID
+            currentTaskId = null;
+            
+            // 清除状态检查间隔
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+                statusCheckInterval = null;
+            }
+        }
+
+        // 表单提交处理
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('pdf_file', document.getElementById('pdfFile').files[0]);
+            formData.append('excel_template', document.getElementById('excelFile').files[0]);
+            formData.append('task_order_no', document.getElementById('taskOrderNo').value);
+            formData.append('order_date', document.getElementById('orderDate').value);
+            formData.append('delivery_date', document.getElementById('deliveryDate').value);
+
+            const submitBtn = document.getElementById('submitBtn');
+            const statusSection = document.getElementById('statusSection');
+            const statusMessage = document.getElementById('statusMessage');
+            const progressFill = document.getElementById('progressFill');
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 处理中...';
+            
+            statusSection.className = 'status-section show status-processing';
+            statusMessage.innerHTML = '<div class="spinner"></div>正在上传文件...';
+            progressFill.style.width = '10%';
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('上传失败');
+                }
+
+                const result = await response.json();
+                currentTaskId = result.task_id;
+                
+                progressFill.style.width = '30%';
+                statusMessage.innerHTML = '<div class="spinner"></div>文件上传成功，正在处理...';
+                
+                // 开始轮询状态
+                startStatusPolling();
+                
+            } catch (error) {
+                showError('上传失败: ' + error.message);
+                resetForm();
+            }
+        });
+
+        function startStatusPolling() {
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+            }
+            
+            statusCheckInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/status/${currentTaskId}`);
+                    const status = await response.json();
+                    
+                    updateStatus(status);
+                    
+                    if (status.status === 'completed' || status.status === 'error') {
+                        clearInterval(statusCheckInterval);
+                        if (status.status === 'completed') {
+                            showSuccess(status.message);
+                            document.getElementById('downloadBtn').href = `/download/${currentTaskId}`;
+                            document.getElementById('downloadBtn').classList.add('show');
+                        } else {
+                            showError(status.message);
+                        }
+                        resetForm();
+                    }
+                } catch (error) {
+                    console.error('状态检查失败:', error);
+                }
+            }, 2000);
+        }
+
+        function updateStatus(status) {
+            const statusSection = document.getElementById('statusSection');
+            const statusMessage = document.getElementById('statusMessage');
+            const progressFill = document.getElementById('progressFill');
+            
+            statusSection.className = `status-section show status-${status.status}`;
+            statusMessage.innerHTML = `<div class="spinner"></div>${status.message}`;
+            
+            if (status.status === 'processing') {
+                progressFill.style.width = '60%';
+            } else if (status.status === 'completed') {
+                progressFill.style.width = '100%';
+            }
+        }
+
+        function showSuccess(message) {
+            const statusSection = document.getElementById('statusSection');
+            const statusMessage = document.getElementById('statusMessage');
+            
+            statusSection.className = 'status-section show status-completed';
+            statusMessage.innerHTML = `<i class="fas fa-check-circle"></i>${message}`;
+        }
+
+        function showError(message) {
+            const statusSection = document.getElementById('statusSection');
+            const statusMessage = document.getElementById('statusMessage');
+            
+            statusSection.className = 'status-section show status-error';
+            statusMessage.innerHTML = `<i class="fas fa-exclamation-circle"></i>${message}`;
+        }
+
+        function resetForm() {
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-play"></i> 开始处理';
+        }
+
+        // 初始化文件上传
+        setupFileUpload('pdfUploadArea', 'pdfFile', 'pdfFileInfo');
+        setupFileUpload('excelUploadArea', 'excelFile', 'excelFileInfo');
+    </script>
+</body>
+</html> 
