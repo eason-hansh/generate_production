@@ -7,17 +7,18 @@ PDF信息提取模块
 import json
 import re
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 import dashscope
 from http import HTTPStatus
+from openpyxl import load_workbook
 
 from marker.converters.pdf import PdfConverter
 from marker.models import create_model_dict
 from marker.output import text_from_rendered
 
 
-dashscope.api_key = 'sk-ecf4a4044d444e75a8c232cb39250066'
+dashscope.api_key = 'sk-349857a349fe47adb358f784c7860d6a'
 
 class PDFExtractor:
     """PDF信息提取器"""
@@ -49,8 +50,7 @@ class PDFExtractor:
                        f"2. 若无法找到po_no，该字段值为空字符串；\n"
                        f"3. '货号(custom item code)' 仅考虑 'EPM Part'对应的信息；\n"
                        f"4. product_info必须是数组，即使只有1个商品；\n"
-                       f"5. quantity字段必须为整数类型（无逗号、无小数点）；\n"
-                       f"## 待处理采购订单：\n")
+                       f"5. quantity字段必须为整数类型（无逗号、无小数点）；\n")
 
     def parse_pdf(self, pdf_path):
         rendered = self.converter(pdf_path)
@@ -64,11 +64,25 @@ class PDFExtractor:
             {'role': 'user', 'content': prompt}
         ]
         response = dashscope.Generation.call(
-            'qwen-long',
+            'qwen-plus',
             messages=messages,
             temperature=0.1,
             result_format='message'  # set the result is message format.
         )
+        # responses = dashscope.Generation.call(
+        #     model="qwen-plus",
+        #     api_key="sk-349857a349fe47adb358f784c7860d6a",
+        #     messages=messages,
+        #     stream=True,
+        #     result_format='message',  # 将返回结果格式设置为 message
+        #     top_p=0.8,
+        #     temperature=0.1,
+        #     enable_search=False,
+        #     enable_thinking=False,
+        #     thinking_budget=1000,
+        # )
+        # for response in responses:
+        #     a = 1
         if response.status_code == HTTPStatus.OK:
             output = response['output']['choices'][0]['message']['content']
             input_tokens = response['usage']['input_tokens']
@@ -82,10 +96,60 @@ class PDFExtractor:
             ))
             return "{}", 0, 0
 
-    def extract_info(self, parsed_pdf):
+    def extract_customer_codes_from_excel(self, excel_path: str) -> List[str]:
+        """
+        从Excel模板中提取客户货号列表
+        
+        Args:
+            excel_path: Excel文件路径
+            
+        Returns:
+            客户货号列表
+        """
+        try:
+            # 加载Excel文件
+            wb = load_workbook(filename=excel_path, data_only=True)
+            main_sheet = wb['主表']
+            
+            customer_codes = []
+            exit_flag = False
+            
+            # 遍历行，找到"客户货号"标记后的所有货号
+            for row in main_sheet.iter_rows():
+                try:
+                    if exit_flag and row[0].value:
+                        # 提取货号（A列的值）
+                        customer_code = str(row[0].value).strip()
+                        if customer_code and customer_code != "客户货号":
+                            customer_codes.append(customer_code)
+                    
+                    # 找到"客户货号"标记
+                    if row[0].value and "客户货号" in str(row[0].value):
+                        exit_flag = True
+                        continue
+                        
+                except Exception as e:
+                    print(f"处理Excel行时出错: {e}")
+                    continue
+            
+            return customer_codes
+            
+        except Exception as e:
+            print(f"从Excel提取客户货号失败: {e}")
+            return []
+
+    def extract_info(self, parsed_pdf, excel_path: Optional[str] = None):
         # 基于 qwen api,以提示词的方式抽取信息
-        prompt = (f"{self.prompt}\n"
-                  f"{parsed_pdf}")
+        # 如果提供了Excel路径，先提取客户货号作为参考
+        customer_codes_reference = ""
+        if excel_path:
+            customer_codes = self.extract_customer_codes_from_excel(excel_path)
+            if customer_codes:
+                codes_str = ", ".join([f'"{code}"' for code in customer_codes])
+                customer_codes_reference = f"\n## 参考货号格式\n根据Excel模板中的客户货号，货号格式参考如下：\n[{codes_str}]\n\n请确保提取的货号格式与上述参考格式保持一致。\n"
+        
+        prompt = (f"{self.prompt}{customer_codes_reference}\n"
+                  f"## 待处理采购订单：\n{parsed_pdf}")
         raw_production_info, input_tokens, output_tokens = self.call_api(prompt)
         # logger.info(f"raw_ai_result: {raw_production_info}")
         # logger.info(f"input_token_nums: {input_tokens}")
@@ -125,15 +189,17 @@ class PDFExtractor:
             error_msg = f"JSON解析失败: {e.msg}\n错误位置: {e.pos}\n错误片段: {new_json_str[max(0, e.pos - 20):e.pos + 20]}"
             raise ValueError(error_msg) from e
 
-    def process(self, pdf_path):
+    def process(self, pdf_path, excel_path: Optional[str] = None):
         """
         1. 解析 pdf --> markdown
         2. ai extract raw_info
         3. raw info --> dict
+        :param pdf_path: PDF文件路径
+        :param excel_path: Excel模板文件路径（可选）
         :return:
         """
         pdf_2_markdown = self.parse_pdf(pdf_path)
-        product_info_str = self.extract_info(pdf_2_markdown)
+        product_info_str = self.extract_info(pdf_2_markdown, excel_path)
         po_product_info_dict = self.convert_json_2_dict(product_info_str)
 
         return po_product_info_dict

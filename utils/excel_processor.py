@@ -24,6 +24,25 @@ class ExcelProcessor:
     def __init__(self):
         pass
     
+    def extract_customer_code_from_excel(self, excel_path):
+        """
+        从Excel模板的B1单元格提取客户号
+        
+        Args:
+            excel_path: Excel文件路径
+            
+        Returns:
+            客户号字符串，如果提取失败返回空字符串
+        """
+        try:
+            wb = load_workbook(filename=excel_path, data_only=True)
+            main_sheet = wb['主表']
+            customer_code = main_sheet['B1'].value
+            return str(customer_code) if customer_code else ""
+        except Exception as e:
+            print(f"从Excel提取客户号失败: {e}")
+            return ""
+    
     def convert_json_2_dict(self, raw_json: str) -> Dict[str, Any]:
         """将JSON字符串转换为字典"""
         # 提取 {}里的所有内容，再转为字典
@@ -59,6 +78,14 @@ class ExcelProcessor:
         suffix = task_order_no[left + 3:]  # "BC"（跳过 "(1)"）
 
         product_num = len(raw_pdf_info['product_info']) # 除去 'po_no'
+        
+        # 生成范围格式的任务单号
+        if product_num == 1:
+            task_order_range = f"{prefix}(1){suffix}"
+        else:
+            task_order_range = f"{prefix}(1-{product_num}){suffix}"
+        
+        # 生成单个任务单号列表（用于Excel填写）
         task_orders = [f"{prefix}({i}){suffix}" for i in range(1, product_num + 1)]
 
         pdf_info = {}
@@ -69,7 +96,7 @@ class ExcelProcessor:
                 'task_order_no': task_orders[index]
             }
 
-        return pdf_info
+        return pdf_info, task_order_range
 
     def process(self, raw_pdf_info, excel_path, task_order_no, order_date, delivery_date, output_dir=None, pdf_name=None):
         # 加载 Excel 文件，注意使用 data_only=False 以保留公式
@@ -88,7 +115,10 @@ class ExcelProcessor:
         main_sheet['B2'] = delivery_date  # 交货期
 
         # 生成任务单号
-        pdf_info = self.generate_task_order_no(raw_pdf_info, task_order_no)
+        pdf_info, task_order_range = self.generate_task_order_no(raw_pdf_info, task_order_no)
+        
+        # 提取客户号
+        customer_code = self.extract_customer_code_from_excel(excel_path)
 
         exit_flag = False
         for row in main_sheet.iter_rows():
@@ -140,14 +170,18 @@ class ExcelProcessor:
             output_dir = Path(output_dir)
             output_dir.mkdir(exist_ok=True)
 
-        # 生成文件名：使用PDF文件名
-        if pdf_name:
-            filename = f"{pdf_name}_生产任务单.xlsx"
+        # 生成文件名：任务单号_PO号_客户号
+        po_no = raw_pdf_info.get('po_no', '')
+        if po_no:
+            po_prefix = f"PO{po_no}"
         else:
-            # 如果没有提供PDF文件名，使用原来的命名方式
-            from datetime import datetime
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"生产任务单_{task_order_no}_{timestamp}.xlsx"
+            po_prefix = "PO"
+        
+        if customer_code:
+            filename = f"{task_order_range}_{po_prefix}_{customer_code}.xlsx"
+        else:
+            # 如果客户号提取失败，使用原来的命名方式
+            filename = f"{task_order_range}_{po_prefix}.xlsx"
 
         output_path = output_dir / filename
 

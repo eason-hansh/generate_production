@@ -117,7 +117,7 @@ async def process_files(task_id: str, pdf_path: Path, excel_path: Path,
         processing_status[task_id]["message"] = "正在提取PDF信息..."
         
         # 1. 提取PDF信息
-        pdf_info = pdf_extractor.process(str(pdf_path))
+        pdf_info = pdf_extractor.process(str(pdf_path), str(excel_path))
         logger.info(f"任务 {task_id} PDF信息提取完成")
         
         processing_status[task_id]["message"] = "正在生成生产任务单..."
