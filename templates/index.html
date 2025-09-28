@@ -22,6 +22,93 @@
             padding: 20px;
         }
 
+        /* 固定状态栏样式 */
+        .status-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            padding: 15px 20px;
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            transform: translateY(-100%);
+            transition: transform 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .status-bar.show {
+            transform: translateY(0);
+        }
+
+        .status-bar.error {
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+        }
+
+        .status-content {
+            display: flex;
+            align-items: center;
+            flex: 1;
+        }
+
+        .status-icon {
+            font-size: 24px;
+            margin-right: 15px;
+        }
+
+        .status-message {
+            font-size: 16px;
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .status-actions {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .status-download-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .status-download-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+            text-decoration: none;
+        }
+
+        .status-close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background 0.3s ease;
+        }
+
+        .status-close-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
         .container {
             background: white;
             border-radius: 20px;
@@ -53,6 +140,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
+            align-items: stretch; /* 确保列高度相等 */
         }
 
         .upload-area {
@@ -62,7 +150,8 @@
             text-align: center;
             transition: all 0.3s ease;
             cursor: pointer;
-            height: 200px;
+            height: 100%; /* 占满网格单元格高度 */
+            min-height: 400px; /* 最小高度 */
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -125,8 +214,21 @@
             margin-right: 6px;
         }
 
+        .input-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 30px;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            background: #f8f9fa;
+            height: 100%; /* 占满网格单元格高度 */
+            min-height: 400px; /* 最小高度 */
+            justify-content: center; /* 垂直居中 */
+        }
+
         .form-group {
-            margin-bottom: 25px;
+            margin-bottom: 0; /* 移除默认边距，使用gap */
         }
 
         .form-group label {
@@ -317,10 +419,24 @@
     </style>
 </head>
 <body>
+    <!-- 固定状态栏 -->
+    <div class="status-bar" id="statusBar">
+        <div class="status-content">
+            <div class="status-icon">✅</div>
+            <div class="status-message">处理完成！</div>
+        </div>
+        <div class="status-actions">
+            <a href="#" class="status-download-btn" id="statusDownloadBtn" style="display: none;">
+                <i class="fas fa-download"></i> 下载文件
+            </a>
+            <button class="status-close-btn" id="statusCloseBtn">×</button>
+        </div>
+    </div>
+
     <div class="container">
         <div class="header">
             <h1><i class="fas fa-cogs"></i> 生产任务单生成系统</h1>
-            <p>上传采购订单PDF和Excel模板，自动生成生产任务单</p>
+            <p>上传采购订单PDF，自动生成生产任务单</p>
         </div>
 
         <form id="uploadForm">
@@ -333,29 +449,26 @@
                     <div class="file-info" id="pdfFileInfo"></div>
                 </div>
 
-                <div class="upload-area" id="excelUploadArea">
-                    <i class="fas fa-file-excel"></i>
-                    <h3>上传Excel模板</h3>
-                    <p>点击选择或拖拽Excel文件到此处</p>
-                    <input type="file" id="excelFile" class="file-input" accept=".xlsx,.xls" required>
-                    <div class="file-info" id="excelFileInfo"></div>
+                <div class="input-section">
+                    <div class="form-group">
+                        <label for="taskOrderNo">任务单号</label>
+                        <input type="text" id="taskOrderNo" name="taskOrderNo" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="orderDate">制单日期</label>
+                        <input type="date" id="orderDate" name="orderDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="deliveryDate">交货期</label>
+                        <input type="date" id="deliveryDate" name="deliveryDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="customerCode">客户号</label>
+                        <input type="text" id="customerCode" name="customerCode" required placeholder="如：429, 522, 817">
+                    </div>
                 </div>
             </div>
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="taskOrderNo">任务单号</label>
-                    <input type="text" id="taskOrderNo" name="taskOrderNo" required>
-                </div>
-                <div class="form-group">
-                    <label for="orderDate">制单日期</label>
-                    <input type="date" id="orderDate" name="orderDate" required>
-                </div>
-                <div class="form-group">
-                    <label for="deliveryDate">交货期</label>
-                    <input type="date" id="deliveryDate" name="deliveryDate" required>
-                </div>
-            </div>
 
             <div class="button-section">
                 <button type="submit" class="submit-btn" id="submitBtn">
@@ -387,11 +500,11 @@
         document.getElementById('orderDate').value = new Date().toISOString().split('T')[0];
         document.getElementById('deliveryDate').value = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-        // 文件上传处理
-        function setupFileUpload(uploadAreaId, fileInputId, fileInfoId) {
-            const uploadArea = document.getElementById(uploadAreaId);
-            const fileInput = document.getElementById(fileInputId);
-            const fileInfo = document.getElementById(fileInfoId);
+        // PDF文件上传处理
+        function setupPdfUpload() {
+            const uploadArea = document.getElementById('pdfUploadArea');
+            const fileInput = document.getElementById('pdfFile');
+            const fileInfo = document.getElementById('pdfFileInfo');
 
             uploadArea.addEventListener('click', () => fileInput.click());
             
@@ -446,14 +559,15 @@
             // 清除文件信息
             document.getElementById('pdfFileInfo').innerHTML = '';
             document.getElementById('pdfFileInfo').classList.remove('show');
-            document.getElementById('excelFileInfo').innerHTML = '';
-            document.getElementById('excelFileInfo').classList.remove('show');
             
             // 隐藏状态区域
             document.getElementById('statusSection').classList.remove('show');
             
             // 隐藏下载按钮
             document.getElementById('downloadBtn').classList.remove('show');
+            
+            // 隐藏固定状态栏
+            hideStatusBar();
             
             // 重置按钮状态
             const submitBtn = document.getElementById('submitBtn');
@@ -480,10 +594,10 @@
             
             const formData = new FormData();
             formData.append('pdf_file', document.getElementById('pdfFile').files[0]);
-            formData.append('excel_template', document.getElementById('excelFile').files[0]);
             formData.append('task_order_no', document.getElementById('taskOrderNo').value);
             formData.append('order_date', document.getElementById('orderDate').value);
             formData.append('delivery_date', document.getElementById('deliveryDate').value);
+            formData.append('customer_code', document.getElementById('customerCode').value);
 
             const submitBtn = document.getElementById('submitBtn');
             const statusSection = document.getElementById('statusSection');
@@ -538,6 +652,7 @@
                         clearInterval(statusCheckInterval);
                         if (status.status === 'completed') {
                             showSuccess(status.message);
+                            // 使用任务ID下载文件
                             document.getElementById('downloadBtn').href = `/download/${currentTaskId}`;
                             document.getElementById('downloadBtn').classList.add('show');
                         } else {
@@ -572,6 +687,9 @@
             
             statusSection.className = 'status-section show status-completed';
             statusMessage.innerHTML = `<i class="fas fa-check-circle"></i>${message}`;
+            
+            // 显示固定状态栏
+            showStatusBar(message, 'success', `/download/${currentTaskId}`);
         }
 
         function showError(message) {
@@ -580,7 +698,57 @@
             
             statusSection.className = 'status-section show status-error';
             statusMessage.innerHTML = `<i class="fas fa-exclamation-circle"></i>${message}`;
+            
+            // 显示固定状态栏
+            showStatusBar(message, 'error');
         }
+
+        // 状态栏控制函数
+        function showStatusBar(message, type = 'success', downloadUrl = null) {
+            const statusBar = document.getElementById('statusBar');
+            const statusIcon = statusBar.querySelector('.status-icon');
+            const statusMessage = statusBar.querySelector('.status-message');
+            const downloadBtn = document.getElementById('statusDownloadBtn');
+            
+            // 设置图标和消息
+            if (type === 'success') {
+                statusIcon.textContent = '✅';
+                statusBar.classList.remove('error');
+            } else {
+                statusIcon.textContent = '❌';
+                statusBar.classList.add('error');
+            }
+            
+            statusMessage.textContent = message;
+            
+            // 设置下载按钮
+            if (downloadUrl && type === 'success') {
+                downloadBtn.href = downloadUrl;
+                downloadBtn.style.display = 'inline-block';
+            } else {
+                downloadBtn.style.display = 'none';
+            }
+            
+            // 显示状态栏
+            statusBar.classList.add('show');
+            
+            // 成功时自动隐藏（5秒后）
+            if (type === 'success') {
+                setTimeout(() => {
+                    hideStatusBar();
+                }, 5000);
+            }
+        }
+
+        function hideStatusBar() {
+            const statusBar = document.getElementById('statusBar');
+            statusBar.classList.remove('show');
+        }
+
+        // 状态栏关闭按钮事件
+        document.getElementById('statusCloseBtn').addEventListener('click', () => {
+            hideStatusBar();
+        });
 
         function resetForm() {
             const submitBtn = document.getElementById('submitBtn');
@@ -588,9 +756,8 @@
             submitBtn.innerHTML = '<i class="fas fa-play"></i> 开始处理';
         }
 
-        // 初始化文件上传
-        setupFileUpload('pdfUploadArea', 'pdfFile', 'pdfFileInfo');
-        setupFileUpload('excelUploadArea', 'excelFile', 'excelFileInfo');
+        // 初始化PDF文件上传
+        setupPdfUpload();
     </script>
 </body>
 </html> 

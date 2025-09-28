@@ -7,7 +7,7 @@ PDF信息提取模块
 import json
 import re
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 
 import dashscope
 from http import HTTPStatus
@@ -98,18 +98,35 @@ class PDFExtractor:
 
     def extract_customer_codes_from_excel(self, excel_path: str) -> List[str]:
         """
-        从Excel模板中提取客户货号列表
+        从Excel 主表 中提取客户货号列表
         
         Args:
             excel_path: Excel文件路径
             
         Returns:
             客户货号列表
+            
+        Raises:
+            Exception: 当文件读取失败或工作表不存在时抛出异常
         """
         try:
             # 加载Excel文件
             wb = load_workbook(filename=excel_path, data_only=True)
-            main_sheet = wb['主表']
+            
+            # 检查工作表是否存在，并处理可能的名称问题
+            sheet_names = wb.sheetnames
+            main_sheet_name = None
+            
+            # 查找主表（可能包含空格或特殊字符）
+            for sheet_name in sheet_names:
+                if "主表" in sheet_name or sheet_name.strip() == "主表":
+                    main_sheet_name = sheet_name
+                    break
+            
+            if not main_sheet_name:
+                raise ValueError(f"未找到主表工作表。可用工作表: {sheet_names}")
+            
+            main_sheet = wb[main_sheet_name]
             
             customer_codes = []
             exit_flag = False
@@ -135,19 +152,10 @@ class PDFExtractor:
             return customer_codes
             
         except Exception as e:
-            print(f"从Excel提取客户货号失败: {e}")
-            return []
+            raise Exception(f"从Excel文件 {excel_path} 提取客户货号失败: {e}")
 
-    def extract_info(self, parsed_pdf, excel_path: Optional[str] = None):
+    def extract_info(self, parsed_pdf, customer_codes_reference: str = ""):
         # 基于 qwen api,以提示词的方式抽取信息
-        # 如果提供了Excel路径，先提取客户货号作为参考
-        customer_codes_reference = ""
-        if excel_path:
-            customer_codes = self.extract_customer_codes_from_excel(excel_path)
-            if customer_codes:
-                codes_str = ", ".join([f'"{code}"' for code in customer_codes])
-                customer_codes_reference = f"\n## 参考货号格式\n根据Excel模板中的客户货号，货号格式参考如下：\n[{codes_str}]\n\n请确保提取的货号格式与上述参考格式保持一致。\n"
-        
         prompt = (f"{self.prompt}{customer_codes_reference}\n"
                   f"## 待处理采购订单：\n{parsed_pdf}")
         raw_production_info, input_tokens, output_tokens = self.call_api(prompt)
@@ -189,17 +197,69 @@ class PDFExtractor:
             error_msg = f"JSON解析失败: {e.msg}\n错误位置: {e.pos}\n错误片段: {new_json_str[max(0, e.pos - 20):e.pos + 20]}"
             raise ValueError(error_msg) from e
 
-    def process(self, pdf_path, excel_path: Optional[str] = None):
+    def process(self, pdf_path, templates: Dict[str, str]):
         """
+        pdf处理流程如下：
         1. 解析 pdf --> markdown
         2. ai extract raw_info
         3. raw info --> dict
-        :param pdf_path: PDF文件路径
-        :param excel_path: Excel模板文件路径（可选）
-        :return:
         """
         pdf_2_markdown = self.parse_pdf(pdf_path)
-        product_info_str = self.extract_info(pdf_2_markdown, excel_path)
+
+        # 抽取模板中的客户货号，作为 AI 的 reference;
+        # template_2_info 中包含模板的：位置+客户货号
+        customer_codes_reference, template_2_info = self.get_customer_codes_reference(templates)
+        # ai 抽取信息
+        product_info_str = self.extract_info(pdf_2_markdown, customer_codes_reference)
+        # 解析 ai 的生成结果
         po_product_info_dict = self.convert_json_2_dict(product_info_str)
 
-        return po_product_info_dict
+        # po_product_info_dict = {'po_no': '4647647606', 'product_info': [{'cust_item_code': '22YM05', 'quantity': 200}, {'cust_item_code': '22YM06', 'quantity': 200}, {'cust_item_code': '23PC31', 'quantity': 200}, {'cust_item_code': '23PC32', 'quantity': 280}, {'cust_item_code': '23PC34', 'quantity': 120}, {'cust_item_code': '23PC35', 'quantity': 200}, {'cust_item_code': '23PC37', 'quantity': 240}, {'cust_item_code': '23PC38', 'quantity': 300}, {'cust_item_code': '23PC39A', 'quantity': 300}, {'cust_item_code': '23PC40A', 'quantity': 1000}, {'cust_item_code': '23PC41', 'quantity': 200}, {'cust_item_code': '23PC43', 'quantity': 1000}, {'cust_item_code': '23PC96', 'quantity': 100}, {'cust_item_code': '450G83A', 'quantity': 100}, {'cust_item_code': '5RXF2A', 'quantity': 200}, {'cust_item_code': '5RXF3B', 'quantity': 100}, {'cust_item_code': '5RXF6A', 'quantity': 200}, {'cust_item_code': '5RXF7B', 'quantity': 100}, {'cust_item_code': '5RXF8B', 'quantity': 100}, {'cust_item_code': '5RXF9B', 'quantity': 100}, {'cust_item_code': '5RXG1A', 'quantity': 200}, {'cust_item_code': '5RXG2B', 'quantity': 100}, {'cust_item_code': '5RXG3A', 'quantity': 500}, {'cust_item_code': '5RXG4A', 'quantity': 112}, {'cust_item_code': '5RXG5A', 'quantity': 500}, {'cust_item_code': '5RXG6A', 'quantity': 112}, {'cust_item_code': '5RXG7A', 'quantity': 112}]}
+        # template_2_info = {'GM': {'customer_codes': ['450G83A', '22YM06', '22YM05', '22YM07', '34NK65'], 'template_path': 'company_templates/522/522_广美_任务单.xlsx'}, 'GX': {'customer_codes': ['23PC31', '23PC32', '23PC33', '23PC34', '23PC35', '23PC36', '23PC37', '23PC38', '23PC39A', '23PC40A', '23PC41', '23PC42', '23PC43', '23PC44', '23PC45', '23PC46', '23PC95', '23PC96', '23PC97', '23PC98', '5RXF2A', '5RXF3B', '5RXF4B', '5RXF5A', '5RXF6A', '5RXF7B', '5RXF8B', '5RXF9B', '5RXG1A', '5RXG2B', '5RXG3A', '5RXG4A', '5RXG5A', '5RXG6A', '5RXG7A', '5RXG0'], 'template_path': 'company_templates/522/522_广线_任务单.xlsx'}}
+
+        # 检测 product_info 是否为空或无效
+        if not po_product_info_dict.get('product_info') or len(po_product_info_dict.get('product_info', [])) == 0:
+            raise ValueError("AI 无法提取 PO 中的产品信息，请手动制作生产任务单。")
+
+        return po_product_info_dict, template_2_info
+
+    def get_customer_codes_reference(self, templates: Dict[str, str]):
+        """
+        获取excel中，客户货号，作为参考字符串，辅助AI进行抽取
+        
+        Args:
+            templates: 模板字典 {'GX': 'path1', 'GM': 'path2'}
+            
+        Returns:
+            1. 格式化的参考货号字符串
+            2. template_2_info， 包含：模板的位置信息 + 客户货号
+        """
+        all_customer_codes = []
+        template_2_info = {}
+        # 遍历所有模板路径
+        for template_type, template_path in templates.items():
+            # 从模板中得到 客户货号
+            customer_codes = self.extract_customer_codes_from_excel(template_path)
+            all_customer_codes.extend(customer_codes)
+            template_2_info[template_type] = {
+                'template_path': template_path,
+                'customer_codes': customer_codes,
+            }
+        
+        return self.format_reference_codes(all_customer_codes), template_2_info
+
+    def format_reference_codes(self, codes: List[str]) -> str:
+        """
+        格式化参考货号字符串
+        
+        Args:
+            codes: 客户货号列表
+            
+        Returns:
+            格式化的参考货号字符串
+        """
+        if not codes:
+            return ""
+        
+        codes_str = ", ".join([f'"{code}"' for code in codes])
+        return f"\n## 参考货号格式\n根据Excel模板中的客户货号，货号格式参考如下：\n[{codes_str}]\n\n请确保提取的货号格式与上述参考格式保持一致。\n"
